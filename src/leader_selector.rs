@@ -66,10 +66,7 @@ impl PeerStatusRepository for OnMemoryPeerStatusRepository {
     async fn update(&self, user_id: UserId, peer_info: PeerInfo) -> Result<()> {
         let mut map_lock = self.peer_info_map.lock().unwrap();
         if !map_lock.contains_key(&user_id) {
-            map_lock.insert(
-                peer_info.peer_id.clone(),
-                HashMap::<PeerId, PeerInfo>::new(),
-            );
+            map_lock.insert(user_id.clone(), HashMap::<PeerId, PeerInfo>::new());
         }
         let user_map = map_lock.get_mut(&user_id).unwrap();
         if let Some(info) = user_map.get_mut(&peer_info.peer_id) {
@@ -112,13 +109,11 @@ impl LeaderRepository for OnMemoryLeaderRepository {
     }
 
     async fn update(&self, user_id: UserId, new_leader_id: PeerId) -> Result<()> {
-        if let Some(leader) = self.leader_map.lock().unwrap().get_mut(&user_id) {
+        let mut map = self.leader_map.lock().unwrap();
+        if let Some(leader) = map.get_mut(&user_id) {
             *leader = new_leader_id;
         } else {
-            self.leader_map
-                .lock()
-                .unwrap()
-                .insert(user_id.clone(), new_leader_id.clone());
+            map.insert(user_id.clone(), new_leader_id.clone());
         };
         Ok(())
     }
@@ -178,7 +173,8 @@ impl LeaderSelector {
             .fetch_all(user_id.clone())
             .await?;
         let leader = self.select(peers)?;
-        if leader != self.leader_repository.fetch(user_id.clone()).await? {
+        let current_leader = self.leader_repository.fetch(user_id.clone()).await;
+        if current_leader.is_err() || leader != current_leader.unwrap() {
             self.leader_repository
                 .update(user_id.clone(), leader.clone())
                 .await?;
@@ -205,5 +201,81 @@ impl LeaderSelector {
 
 #[cfg(test)]
 mod test {
+    use core::panic;
+
     use super::*;
+
+    fn create_selector() -> LeaderSelector {
+        let leader_repository: Arc<Box<dyn LeaderRepository>> =
+            Arc::new(Box::new(OnMemoryLeaderRepository::new()));
+        let peer_status_repository: Arc<Box<dyn PeerStatusRepository>> =
+            Arc::new(Box::new(OnMemoryPeerStatusRepository::new()));
+        let selector = LeaderSelector::new(peer_status_repository, leader_repository);
+        return selector;
+    }
+
+    #[tokio::test]
+    async fn test_leader_selection_returns_error_when_no_peer() -> () {
+        let selector = create_selector();
+        let leader = selector.select_leader(String::from("user1")).await;
+        assert!(leader.is_err())
+    }
+
+    #[tokio::test]
+    async fn test_leader_selection_returns_first_peer_when_multiple_available() {
+        let selector = create_selector();
+        selector
+            .handle_connect(
+                String::from("user1"),
+                PeerInfo {
+                    peer_id: String::from("peer1"),
+                    updated_at: 1,
+                },
+            )
+            .await
+            .unwrap();
+        selector
+            .handle_connect(
+                String::from("user1"),
+                PeerInfo {
+                    peer_id: String::from("peer2"),
+                    updated_at: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let leader = selector.select_leader(String::from("user1")).await.unwrap();
+        assert_eq!(leader, String::from("peer1"))
+    }
+
+    #[tokio::test]
+    async fn test_leader_selection_returns_second_peer_when_first_peer_is_disconnected() {
+        let selector = create_selector();
+        selector
+            .handle_connect(
+                String::from("user1"),
+                PeerInfo {
+                    peer_id: String::from("peer1"),
+                    updated_at: 1,
+                },
+            )
+            .await
+            .unwrap();
+        selector
+            .handle_connect(
+                String::from("user1"),
+                PeerInfo {
+                    peer_id: String::from("peer2"),
+                    updated_at: 1,
+                },
+            )
+            .await
+            .unwrap();
+        selector
+            .handle_disconnect(String::from("user1"), String::from("peer1"))
+            .await
+            .unwrap();
+        let leader = selector.select_leader(String::from("user1")).await.unwrap();
+        assert_eq!(leader, String::from("peer2"))
+    }
 }
