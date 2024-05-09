@@ -8,13 +8,13 @@ type UserId = String;
 type PeerId = String;
 
 #[derive(Clone)]
-struct PeerInfo {
+pub struct PeerInfo {
     peer_id: PeerId,
     updated_at: u64,
 }
 
 #[async_trait::async_trait]
-pub trait PeerStatusRepository {
+pub trait PeerStatusRepository: Send + Sync {
     async fn fetch(&self, user_id: UserId, peer_id: PeerId) -> Result<PeerInfo>;
     async fn fetch_all(&self, user_id: UserId) -> Result<Vec<PeerInfo>>;
     async fn delete(&self, user_id: UserId, peer_id: PeerId) -> Result<()>;
@@ -79,7 +79,7 @@ impl PeerStatusRepository for OnMemoryPeerStatusRepository {
 }
 
 #[async_trait::async_trait]
-pub trait LeaderRepository {
+pub trait LeaderRepository: Send + Sync {
     async fn fetch(&self, user_id: UserId) -> Result<PeerId>;
     async fn update(&self, user_id: UserId, leader_id: PeerId) -> Result<()>;
 }
@@ -119,6 +119,7 @@ impl LeaderRepository for OnMemoryLeaderRepository {
     }
 }
 
+#[derive(Clone)]
 pub struct LeaderSelector {
     peer_status_repository: Arc<Box<dyn PeerStatusRepository>>,
     leader_repository: Arc<Box<dyn LeaderRepository>>,
