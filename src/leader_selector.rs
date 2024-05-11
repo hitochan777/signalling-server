@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, Result};
+use serde::Serialize;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -7,14 +8,14 @@ use std::{
 type UserId = String;
 type PeerId = String;
 
-#[derive(Clone)]
-struct PeerInfo {
-    peer_id: PeerId,
-    updated_at: u64,
+#[derive(Clone, Serialize, Debug)]
+pub struct PeerInfo {
+    pub peer_id: PeerId,
+    pub updated_at: u64,
 }
 
 #[async_trait::async_trait]
-pub trait PeerStatusRepository {
+pub trait PeerStatusRepository: Send + Sync {
     async fn fetch(&self, user_id: UserId, peer_id: PeerId) -> Result<PeerInfo>;
     async fn fetch_all(&self, user_id: UserId) -> Result<Vec<PeerInfo>>;
     async fn delete(&self, user_id: UserId, peer_id: PeerId) -> Result<()>;
@@ -79,7 +80,7 @@ impl PeerStatusRepository for OnMemoryPeerStatusRepository {
 }
 
 #[async_trait::async_trait]
-pub trait LeaderRepository {
+pub trait LeaderRepository: Send + Sync {
     async fn fetch(&self, user_id: UserId) -> Result<PeerId>;
     async fn update(&self, user_id: UserId, leader_id: PeerId) -> Result<()>;
 }
@@ -119,6 +120,7 @@ impl LeaderRepository for OnMemoryLeaderRepository {
     }
 }
 
+#[derive(Clone)]
 pub struct LeaderSelector {
     peer_status_repository: Arc<Box<dyn PeerStatusRepository>>,
     leader_repository: Arc<Box<dyn LeaderRepository>>,
@@ -133,6 +135,11 @@ impl LeaderSelector {
             peer_status_repository,
             leader_repository,
         }
+    }
+
+    pub async fn get_statuses_by_user_id(&self, user_id: UserId) -> Result<Vec<PeerInfo>> {
+        let statuses = self.peer_status_repository.fetch_all(user_id).await?;
+        Ok(statuses)
     }
 
     pub async fn handle_connect(&self, user_id: UserId, info: PeerInfo) -> Result<()> {
