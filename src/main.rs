@@ -1,11 +1,9 @@
 use axum::{
     self,
-    extract::{Json, Path, Query, Request, State},
+    extract::{Json, Path, State},
     http::StatusCode,
-    middleware::{self, Next},
-    response::Response,
     routing::{get, post},
-    Extension, Router,
+    Router,
 };
 use shuttle_axum::ShuttleAxum;
 use std::sync::Arc;
@@ -22,8 +20,9 @@ async fn main() -> ShuttleAxum {
     let selector = leader_selector::LeaderSelector::new(peer_status_repository, leader_repository);
 
     let protected_routes = Router::new()
-        .route("/conncet/:user_id/:peer_id", post(connect))
+        .route("/connect/:user_id/:peer_id", post(connect))
         .route("/disconnect/:user_id/:peer_id", post(disconnect))
+        .route("/statuses/:user_id", get(get_peer_statuses))
         .with_state(selector);
 
     let public_routes = Router::new().route("/health", get(|| async { "OK" }));
@@ -32,7 +31,7 @@ async fn main() -> ShuttleAxum {
 }
 
 async fn connect(
-    Path(peer_id): Path<String>,
+    Path((user_id, peer_id)): Path<(String, String)>,
     State(leader_selector): State<leader_selector::LeaderSelector>,
 ) -> StatusCode {
     match leader_selector
@@ -54,7 +53,7 @@ async fn connect(
 }
 
 async fn disconnect(
-    Path(peer_id): Path<String>,
+    Path((user_id, peer_id)): Path<(String, String)>,
     State(leader_selector): State<leader_selector::LeaderSelector>,
 ) -> StatusCode {
     match leader_selector.handle_disconnect(user_id, peer_id).await {
@@ -62,6 +61,19 @@ async fn disconnect(
         Err(err) => {
             println!("Failed to handle disconnection: {:?}", err);
             StatusCode::BAD_REQUEST
+        }
+    }
+}
+
+async fn get_peer_statuses(
+    Path(user_id): Path<String>,
+    State(leader_selector): State<leader_selector::LeaderSelector>,
+) -> Json<Vec<leader_selector::PeerInfo>> {
+    match leader_selector.get_statuses_by_user_id(user_id).await {
+        Ok(statuses) => Json(statuses),
+        Err(err) => {
+            println!("Failed to get statuses: {:?}", err);
+            Json(vec![])
         }
     }
 }

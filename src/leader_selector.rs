@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, Result};
+use serde::Serialize;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -7,10 +8,10 @@ use std::{
 type UserId = String;
 type PeerId = String;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Debug)]
 pub struct PeerInfo {
-    peer_id: PeerId,
-    updated_at: u64,
+    pub peer_id: PeerId,
+    pub updated_at: u64,
 }
 
 #[async_trait::async_trait]
@@ -134,6 +135,11 @@ impl LeaderSelector {
             peer_status_repository,
             leader_repository,
         }
+    }
+
+    pub async fn get_statuses_by_user_id(&self, user_id: UserId) -> Result<Vec<PeerInfo>> {
+        let statuses = self.peer_status_repository.fetch_all(user_id).await?;
+        Ok(statuses)
     }
 
     pub async fn handle_connect(&self, user_id: UserId, info: PeerInfo) -> Result<()> {
