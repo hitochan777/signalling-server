@@ -1,7 +1,9 @@
+use anyhow::anyhow;
 use axum::{
     self,
     extract::{Json, Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
@@ -23,6 +25,7 @@ async fn main() -> ShuttleAxum {
         .route("/connect/:user_id/:peer_id", post(connect))
         .route("/disconnect/:user_id/:peer_id", post(disconnect))
         .route("/statuses/:user_id", get(get_peer_statuses))
+        .route("/leader/:user_id", get(get_leader))
         .with_state(selector);
 
     let public_routes = Router::new().route("/health", get(|| async { "OK" }));
@@ -75,6 +78,30 @@ async fn get_peer_statuses(
         Err(err) => {
             println!("Failed to get statuses: {:?}", err);
             Json(vec![])
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+struct GetLeaderResponse {
+    leader_id: String,
+}
+
+async fn get_leader(
+    Path(user_id): Path<String>,
+    State(leader_selector): State<leader_selector::LeaderSelector>,
+) -> Response {
+    match leader_selector
+        .get_leader(user_id)
+        .await
+        .and_then(|opt_string| match opt_string {
+            Some(s) => Ok(s),
+            None => Err(anyhow!("There is no leader")),
+        }) {
+        Ok(leader_id) => Json(GetLeaderResponse { leader_id }).into_response(),
+        Err(err) => {
+            println!("Failed to get leader: {:?}", err);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
 }

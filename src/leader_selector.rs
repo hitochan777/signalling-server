@@ -81,7 +81,7 @@ impl PeerStatusRepository for OnMemoryPeerStatusRepository {
 
 #[async_trait::async_trait]
 pub trait LeaderRepository: Send + Sync {
-    async fn fetch(&self, user_id: UserId) -> Result<PeerId>;
+    async fn fetch(&self, user_id: UserId) -> Result<Option<PeerId>>;
     async fn update(&self, user_id: UserId, leader_id: PeerId) -> Result<()>;
 }
 
@@ -99,14 +99,14 @@ impl OnMemoryLeaderRepository {
 
 #[async_trait::async_trait]
 impl LeaderRepository for OnMemoryLeaderRepository {
-    async fn fetch(&self, user_id: UserId) -> Result<PeerId> {
-        return self
+    async fn fetch(&self, user_id: UserId) -> Result<Option<PeerId>> {
+        let maybe_peer_id = self
             .leader_map
             .lock()
             .unwrap()
             .get(&user_id)
-            .and_then(|info| Some(info.clone()))
-            .ok_or(anyhow!("not found"));
+            .and_then(|info| Some(info.clone()));
+        Ok(maybe_peer_id)
     }
 
     async fn update(&self, user_id: UserId, new_leader_id: PeerId) -> Result<()> {
@@ -142,6 +142,10 @@ impl LeaderSelector {
         Ok(statuses)
     }
 
+    pub async fn get_leader(&self, user_id: UserId) -> Result<Option<PeerId>> {
+        self.leader_repository.fetch(user_id).await
+    }
+
     pub async fn handle_connect(&self, user_id: UserId, info: PeerInfo) -> Result<()> {
         self.peer_status_repository
             .update(user_id.clone(), info)
@@ -164,8 +168,13 @@ impl LeaderSelector {
             .fetch_all(user_id.clone())
             .await?;
         let leader = self.select(peers)?;
-        let current_leader = self.leader_repository.fetch(user_id.clone()).await;
-        if current_leader.is_err() || leader != current_leader.unwrap() {
+        let maybe_current_leader = self.leader_repository.fetch(user_id.clone()).await?;
+        let should_update = if let Some(current_leader) = maybe_current_leader {
+            leader != current_leader
+        } else {
+            true
+        };
+        if should_update {
             self.leader_repository
                 .update(user_id.clone(), leader.clone())
                 .await?;
