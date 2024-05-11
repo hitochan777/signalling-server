@@ -11,7 +11,7 @@ type PeerId = String;
 #[derive(Clone, Serialize, Debug)]
 pub struct PeerInfo {
     pub peer_id: PeerId,
-    pub updated_at: u64,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[async_trait::async_trait]
@@ -143,24 +143,8 @@ impl LeaderSelector {
     }
 
     pub async fn handle_connect(&self, user_id: UserId, info: PeerInfo) -> Result<()> {
-        let peer = match self
-            .peer_status_repository
-            .fetch(user_id.clone(), info.peer_id.clone())
-            .await
-        {
-            Ok(peer) => peer,
-            Err(_) => PeerInfo {
-                peer_id: info.peer_id.clone(),
-                // TODO: set updated_at to now
-                updated_at: 0,
-            },
-        };
-        let updated_info = PeerInfo {
-            updated_at: info.updated_at,
-            ..peer
-        };
         self.peer_status_repository
-            .update(user_id.clone(), updated_info)
+            .update(user_id.clone(), info)
             .await?;
         self.select_leader(user_id.clone()).await?;
         Ok(())
@@ -236,7 +220,7 @@ mod test {
                 String::from("user1"),
                 PeerInfo {
                     peer_id: String::from("peer1"),
-                    updated_at: 1,
+                    updated_at: chrono::Utc::now(),
                 },
             )
             .await
@@ -246,7 +230,7 @@ mod test {
                 String::from("user1"),
                 PeerInfo {
                     peer_id: String::from("peer2"),
-                    updated_at: 1,
+                    updated_at: chrono::Utc::now(),
                 },
             )
             .await
@@ -263,7 +247,7 @@ mod test {
                 String::from("user1"),
                 PeerInfo {
                     peer_id: String::from("peer1"),
-                    updated_at: 1,
+                    updated_at: chrono::Utc::now(),
                 },
             )
             .await
@@ -273,7 +257,7 @@ mod test {
                 String::from("user1"),
                 PeerInfo {
                     peer_id: String::from("peer2"),
-                    updated_at: 1,
+                    updated_at: chrono::Utc::now(),
                 },
             )
             .await

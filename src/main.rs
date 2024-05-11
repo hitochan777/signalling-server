@@ -34,12 +34,13 @@ async fn connect(
     Path((user_id, peer_id)): Path<(String, String)>,
     State(leader_selector): State<leader_selector::LeaderSelector>,
 ) -> StatusCode {
+    let now = chrono::Utc::now();
     match leader_selector
         .handle_connect(
             user_id,
             leader_selector::PeerInfo {
                 peer_id,
-                updated_at: 0,
+                updated_at: now,
             },
         )
         .await
