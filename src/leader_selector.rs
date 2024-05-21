@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
@@ -12,6 +12,12 @@ type PeerId = String;
 pub struct PeerInfo {
     pub peer_id: PeerId,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl PeerInfo {
+    pub fn is_valid(&self, now: chrono::DateTime<chrono::Utc>) -> bool {
+        now - self.updated_at < chrono::Duration::seconds(60)
+    }
 }
 
 #[async_trait::async_trait]
@@ -145,6 +151,18 @@ impl LeaderSelector {
     pub async fn get_leader(&self, user_id: UserId) -> Result<Option<PeerId>> {
         self.leader_repository.fetch(user_id).await
     }
+
+    // pub async fn check(&self) {
+    //     let leaders = self.leader_repository.fetch_all(&self).await?;
+    //     let now = chrono::Utc::now();
+    //     let reselection_needed_user_ids = HashSet::new();
+    //     for (user_id, peer_id) in leaders {
+    //         let status = self.peer_status_repository.fetch(user_id, peer_id).await?;
+    //         if !status.is_valid(now) {
+    //             self.handle_disconnect(user_id, peer_id);
+    //         }
+    //     }
+    // }
 
     pub async fn handle_connect(&self, user_id: UserId, info: PeerInfo) -> Result<()> {
         self.peer_status_repository
