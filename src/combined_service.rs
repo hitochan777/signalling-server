@@ -1,23 +1,22 @@
+use std::{future::Future, pin::Pin};
+
 use shuttle_axum::AxumService;
 
-use crate::cron_service::{AsyncFunc, CronService};
+use crate::cron_service::CronService;
 
-pub struct CombinedService<F: AsyncFunc>  {
-  axum: AxumService,
-  cron: CronService<F>,
+pub struct CombinedService {
+    axum: AxumService,
+    cron: CronService,
 }
 
-impl<F: AsyncFunc> CombinedService<F> {
-    pub fn new(axum: AxumService, cron: CronService<F>) -> Self {
-        Self {
-            axum,
-            cron,
-        }
+impl CombinedService {
+    pub fn new(axum: AxumService, cron: CronService) -> Self {
+        Self { axum, cron }
     }
 }
 
 #[shuttle_runtime::async_trait]
-impl<F: AsyncFunc> shuttle_runtime::Service for CombinedService<F> {
+impl shuttle_runtime::Service for CombinedService {
     async fn bind(self, addr: std::net::SocketAddr) -> Result<(), shuttle_runtime::Error> {
         let http = async {
             let _ = self.axum.bind(addr).await;
@@ -32,4 +31,3 @@ impl<F: AsyncFunc> shuttle_runtime::Service for CombinedService<F> {
         Ok(())
     }
 }
-

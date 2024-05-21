@@ -1,29 +1,27 @@
+use anyhow::Result;
 use std::{future::Future, pin::Pin};
 
-type FuncResult = Pin<Box<dyn Future<Output=Result<(), String>>>>;
-pub trait AsyncFunc: Fn() -> FuncResult + Send + Sync + 'static {} 
+type Op = Box<dyn Send + Fn() -> Box<dyn Send + Future<Output = ()>>>;
 
-pub struct CronService<F: AsyncFunc> {
-  interval: u64,
-  job_fn: F, 
+pub struct CronService {
+    interval: u64,
+    job_fn: Op,
 }
 
-impl<F: AsyncFunc> CronService<F> {
-    pub fn new(interval: u64, job_fn: F) -> Self {
-        Self {
-          interval,
-          job_fn,
-        }
+impl CronService {
+    pub fn new(interval: u64, job_fn: Op) -> Self {
+        Self { interval, job_fn }
     }
 }
 
 #[shuttle_runtime::async_trait]
-impl<F: AsyncFunc> shuttle_runtime::Service for CronService<F> {
+impl shuttle_runtime::Service for CronService {
     async fn bind(self, _addr: std::net::SocketAddr) -> Result<(), shuttle_runtime::Error> {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(self.interval)).await;
-            (self.job_fn)();
+            // it is assumed that job_fn executes very quickly, otherwiwse, job_fn is not executed at `interval`
+            let future = Box::into_pin((self.job_fn)());
+            future.await;
         }
-        Ok(())
     }
 }
