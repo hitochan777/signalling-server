@@ -26,7 +26,7 @@ pub trait PeerStatusRepository: Send + Sync {
     async fn fetch_all_by_user_id(&self, user_id: UserId) -> Result<Vec<PeerInfo>>;
     async fn delete_one(&self, user_id: UserId, peer_id: PeerId) -> Result<()>;
     async fn update_one(&self, user_id: UserId, peer_info: PeerInfo) -> Result<()>;
-    async fn fetch_user_ids(&self) -> Result<dyn Iterator<Item=UserId>>;
+    async fn fetch_user_ids(&self) -> Result<Vec<UserId>>;
 }
 
 pub struct OnMemoryPeerStatusRepository {
