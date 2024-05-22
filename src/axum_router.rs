@@ -10,12 +10,7 @@ use axum::{
 };
 use std::sync::Arc;
 
-pub fn create_axum_app() -> Router {
-    let leader_repository: Arc<Box<dyn leader_selector::LeaderRepository>> =
-        Arc::new(Box::new(leader_selector::OnMemoryLeaderRepository::new()));
-    let peer_status_repository: Arc<Box<dyn leader_selector::PeerStatusRepository>> = Arc::new(
-        Box::new(leader_selector::OnMemoryPeerStatusRepository::new()),
-    );
+pub fn create_axum_app(leader_repository: Arc<Box<dyn leader_selector::LeaderRepository>>, peer_status_repository: Arc<Box<dyn leader_selector::PeerStatusRepository>>) -> Router {
     let selector = leader_selector::LeaderSelector::new(peer_status_repository, leader_repository);
 
     let protected_routes = Router::new()
