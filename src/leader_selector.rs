@@ -149,7 +149,10 @@ impl LeaderSelector {
     }
 
     pub async fn get_statuses_by_user_id(&self, user_id: UserId) -> Result<Vec<PeerInfo>> {
-        let statuses = self.peer_status_repository.fetch_all_by_user_id(user_id).await?;
+        let statuses = self
+            .peer_status_repository
+            .fetch_all_by_user_id(user_id)
+            .await?;
         Ok(statuses)
     }
 
