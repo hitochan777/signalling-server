@@ -10,14 +10,7 @@ use axum::{
 };
 use std::sync::Arc;
 
-pub fn create_axum_app() -> Router {
-    let leader_repository: Arc<Box<dyn leader_selector::LeaderRepository>> =
-        Arc::new(Box::new(leader_selector::OnMemoryLeaderRepository::new()));
-    let peer_status_repository: Arc<Box<dyn leader_selector::PeerStatusRepository>> = Arc::new(
-        Box::new(leader_selector::OnMemoryPeerStatusRepository::new()),
-    );
-    let selector = leader_selector::LeaderSelector::new(peer_status_repository, leader_repository);
-
+pub fn create_axum_app(selector: Arc<Box<leader_selector::LeaderSelector>>) -> Router {
     let protected_routes = Router::new()
         .route("/connect/:user_id/:peer_id", post(connect))
         .route("/disconnect/:user_id/:peer_id", post(disconnect))
@@ -31,7 +24,7 @@ pub fn create_axum_app() -> Router {
 
 async fn connect(
     Path((user_id, peer_id)): Path<(String, String)>,
-    State(leader_selector): State<leader_selector::LeaderSelector>,
+    State(leader_selector): State<Arc<Box<leader_selector::LeaderSelector>>>,
 ) -> StatusCode {
     let now = chrono::Utc::now();
     match leader_selector
@@ -54,7 +47,7 @@ async fn connect(
 
 async fn disconnect(
     Path((user_id, peer_id)): Path<(String, String)>,
-    State(leader_selector): State<leader_selector::LeaderSelector>,
+    State(leader_selector): State<Arc<Box<leader_selector::LeaderSelector>>>,
 ) -> StatusCode {
     match leader_selector.handle_disconnect(user_id, peer_id).await {
         Ok(_) => StatusCode::ACCEPTED,
@@ -67,7 +60,7 @@ async fn disconnect(
 
 async fn get_peer_statuses(
     Path(user_id): Path<String>,
-    State(leader_selector): State<leader_selector::LeaderSelector>,
+    State(leader_selector): State<Arc<Box<leader_selector::LeaderSelector>>>,
 ) -> Json<Vec<leader_selector::PeerInfo>> {
     match leader_selector.get_statuses_by_user_id(user_id).await {
         Ok(statuses) => Json(statuses),
@@ -85,7 +78,7 @@ struct GetLeaderResponse {
 
 async fn get_leader(
     Path(user_id): Path<String>,
-    State(leader_selector): State<leader_selector::LeaderSelector>,
+    State(leader_selector): State<Arc<Box<leader_selector::LeaderSelector>>>,
 ) -> Response {
     match leader_selector
         .get_leader(user_id)
