@@ -62,6 +62,10 @@ impl PeerStatusRepository for OnMemoryPeerStatusRepository {
             .get(&user_id)
             .map(|info| info.values().cloned().collect())
             .or_else(|| Some(vec![]))
+            .map(|mut v| {
+                v.sort_by_key(|peer_info| peer_info.updated_at);
+                v
+            })
             .ok_or(anyhow!("unknown error"));
     }
     async fn delete_one(&self, user_id: UserId, peer_id: PeerId) -> Result<()> {
@@ -156,18 +160,6 @@ impl LeaderSelector {
         self.leader_repository.fetch(user_id).await
     }
 
-    // pub async fn check(&self) {
-    //     let leaders = self.leader_repository.fetch_all(&self).await?;
-    //     let now = chrono::Utc::now();
-    //     let reselection_needed_user_ids = HashSet::new();
-    //     for (user_id, peer_id) in leaders {
-    //         let status = self.peer_status_repository.fetch(user_id, peer_id).await?;
-    //         if !status.is_valid(now) {
-    //             self.handle_disconnect(user_id, peer_id);
-    //         }
-    //     }
-    // }
-
     pub async fn handle_connect(&self, user_id: UserId, info: PeerInfo) -> Result<()> {
         self.peer_status_repository
             .update_one(user_id.clone(), info)
@@ -189,8 +181,8 @@ impl LeaderSelector {
             .peer_status_repository
             .fetch_all_by_user_id(user_id.clone())
             .await?;
-        let leader = self.select(peers)?;
         let maybe_current_leader = self.leader_repository.fetch(user_id.clone()).await?;
+        let leader = self.select(peers, &maybe_current_leader)?;
         let should_update = if let Some(current_leader) = maybe_current_leader {
             leader != current_leader
         } else {
@@ -200,14 +192,25 @@ impl LeaderSelector {
             self.leader_repository
                 .update(user_id.clone(), leader.clone())
                 .await?;
-            // self.broadcast(user_id, leader);
         }
         Ok(leader)
     }
 
-    fn select(&self, peers: Vec<PeerInfo>) -> Result<PeerId> {
+    fn select(
+        &self,
+        peers: Vec<PeerInfo>,
+        maybe_current_leader: &Option<PeerId>,
+    ) -> Result<PeerId> {
         if peers.is_empty() {
             bail!("Cannot find any peers");
+        }
+        // try to keep leader to avoid notifying leader change
+        // a peer is supposed to ask for current leader only when leader is disconnected.
+        // this behavior is okay if we keep the leader as long as it is connected
+        if let Some(current_leader) = maybe_current_leader {
+            if peers.iter().any(|peer| peer.peer_id == *current_leader) {
+                return Ok(current_leader.clone());
+            }
         }
         // for now choose the first one
         Ok(peers[0].peer_id.clone())
