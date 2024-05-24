@@ -216,13 +216,6 @@ impl LeaderSelector {
         // for now choose the first one
         Ok(peers[0].peer_id.clone())
     }
-
-    /*fn gc(&self) -> () {
-        let info_list = self.peer_status_service.fetch();
-        let new_list = info_list.iter().filter(|&peer_info| now - peer_info.updated_at > 60).map(|peer_info| peer_info.clone()).collect();
-        let
-        self.peer_status_service.update(new_list);
-    }*/
 }
 
 #[cfg(test)]
