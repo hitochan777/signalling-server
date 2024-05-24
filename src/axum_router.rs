@@ -73,7 +73,7 @@ async fn get_peer_statuses(
 
 #[derive(serde::Serialize)]
 struct GetLeaderResponse {
-    leader_id: String,
+    leader_id: Option<String>,
 }
 
 async fn get_leader(
@@ -84,8 +84,8 @@ async fn get_leader(
         .get_leader(user_id)
         .await
         .and_then(|opt_string| match opt_string {
-            Some(s) => Ok(s),
-            None => Err(anyhow!("There is no leader")),
+            Some(leader_id) => Ok(Some(leader_id)),
+            None => Ok(None),
         }) {
         Ok(leader_id) => Json(GetLeaderResponse { leader_id }).into_response(),
         Err(err) => {
