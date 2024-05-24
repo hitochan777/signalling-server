@@ -1,7 +1,8 @@
+#![allow(unused)]
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{Arc, Mutex},
 };
 
@@ -50,7 +51,7 @@ impl PeerStatusRepository for OnMemoryPeerStatusRepository {
             .unwrap()
             .get(&user_id)
             .and_then(|v| v.get(&peer_id))
-            .and_then(|info| Some(info.clone()))
+            .cloned()
             .ok_or(anyhow!("not found"));
     }
     async fn fetch_all_by_user_id(&self, user_id: UserId) -> Result<Vec<PeerInfo>> {
@@ -59,7 +60,7 @@ impl PeerStatusRepository for OnMemoryPeerStatusRepository {
             .lock()
             .unwrap()
             .get(&user_id)
-            .and_then(|info| Some(info.values().map(|v| v.clone()).collect()))
+            .map(|info| info.values().cloned().collect())
             .or_else(|| Some(vec![]))
             .ok_or(anyhow!("unknown error"));
     }
@@ -111,12 +112,7 @@ impl OnMemoryLeaderRepository {
 #[async_trait::async_trait]
 impl LeaderRepository for OnMemoryLeaderRepository {
     async fn fetch(&self, user_id: UserId) -> Result<Option<PeerId>> {
-        let maybe_peer_id = self
-            .leader_map
-            .lock()
-            .unwrap()
-            .get(&user_id)
-            .and_then(|info| Some(info.clone()));
+        let maybe_peer_id = self.leader_map.lock().unwrap().get(&user_id).cloned();
         Ok(maybe_peer_id)
     }
 
@@ -220,7 +216,6 @@ impl LeaderSelector {
 
 #[cfg(test)]
 mod test {
-    use core::panic;
 
     use super::*;
 
@@ -229,12 +224,12 @@ mod test {
             Arc::new(Box::new(OnMemoryLeaderRepository::new()));
         let peer_status_repository: Arc<Box<dyn PeerStatusRepository>> =
             Arc::new(Box::new(OnMemoryPeerStatusRepository::new()));
-        let selector = LeaderSelector::new(peer_status_repository, leader_repository);
-        return selector;
+
+        LeaderSelector::new(peer_status_repository, leader_repository)
     }
 
     #[tokio::test]
-    async fn test_leader_selection_returns_error_when_no_peer() -> () {
+    async fn test_leader_selection_returns_error_when_no_peer() {
         let selector = create_selector();
         let leader = selector.select_leader(String::from("user1")).await;
         assert!(leader.is_err())

@@ -1,5 +1,3 @@
-use std::{future::Future, pin::Pin};
-
 use shuttle_axum::AxumService;
 
 use crate::cron_service::CronService;

@@ -16,10 +16,10 @@ async fn main() -> Result<CombinedService, shuttle_runtime::Error> {
     let peer_status_repository: Arc<Box<dyn leader_selector::PeerStatusRepository>> = Arc::new(
         Box::new(leader_selector::OnMemoryPeerStatusRepository::new()),
     );
-    let selector = Arc::new(Box::new(leader_selector::LeaderSelector::new(
+    let selector = Arc::new(leader_selector::LeaderSelector::new(
         peer_status_repository.clone(),
         leader_repository.clone(),
-    )));
+    ));
     let selector_clone = selector.clone();
     let job: Box<dyn Send + 'static + Fn() -> Box<dyn Send + 'static + Future<Output = ()>>> =
         Box::new(move || {

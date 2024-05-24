@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::{future::Future, pin::Pin};
+use std::future::Future;
 
 type Op = Box<dyn Send + Fn() -> Box<dyn Send + Future<Output = ()>>>;
 
