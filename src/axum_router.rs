@@ -1,5 +1,5 @@
-use crate::leader_selector;
-use anyhow::{bail, Result};
+use crate::{leader_selector, pubsub::PubSub};
+use anyhow::Result;
 use axum::{
     self,
     extract::{Json, Path, State},
@@ -9,12 +9,10 @@ use axum::{
     Router,
 };
 use std::{
-    collections::HashMap,
     convert::Infallible,
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::sync::mpsc as tokio_mpsc;
 use tokio_stream::{wrappers::UnboundedReceiverStream, Stream, StreamExt};
 
 struct AppState {
@@ -71,37 +69,10 @@ async fn handle_sdp_event(
     }
 }
 
-struct PubSub<T> {
-    conn_map: HashMap<String, tokio_mpsc::UnboundedSender<T>>,
-}
-
-impl<T: Send + Sync + 'static> PubSub<T> {
-    pub fn new() -> Self {
-        Self {
-            conn_map: HashMap::new(),
-        }
-    }
-    fn publish(&self, target: &str, data: T) -> Result<()> {
-        if let Some(tx) = self.conn_map.get(target) {
-            tx.send(data)?;
-            Ok(())
-        } else {
-            bail!("target {} not found", target);
-        }
-    }
-    fn add_subscriber(&mut self, target: &str) -> Result<tokio_mpsc::UnboundedReceiver<T>, String> {
-        let (tx, rx) = tokio_mpsc::unbounded_channel::<T>();
-        // insert or update the tx
-        self.conn_map.insert(target.to_string(), tx);
-        Ok(rx)
-    }
-}
-
 async fn handle_sse(
     Path(peer_id): Path<String>,
     State(app_state): State<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    print!("hge");
     let receiver = app_state
         .pubsub
         .lock()

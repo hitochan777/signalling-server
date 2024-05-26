@@ -8,6 +8,7 @@ mod axum_router;
 mod combined_service;
 mod cron_service;
 mod leader_selector;
+mod pubsub;
 
 #[shuttle_runtime::main]
 async fn main() -> Result<CombinedService, shuttle_runtime::Error> {
