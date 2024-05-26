@@ -3,11 +3,13 @@ use axum::{
     self,
     extract::{Json, Path, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::{sse::Event, IntoResponse, Response, Sse},
     routing::{get, post},
     Router,
 };
-use std::sync::Arc;
+use futures::{stream, Stream};
+use std::{convert::Infallible, sync::Arc, time::Duration};
+use tokio_stream::StreamExt as _;
 
 pub fn create_axum_app(selector: Arc<leader_selector::LeaderSelector>) -> Router {
     let protected_routes = Router::new()
@@ -15,10 +17,23 @@ pub fn create_axum_app(selector: Arc<leader_selector::LeaderSelector>) -> Router
         .route("/disconnect/:user_id/:peer_id", post(disconnect))
         .route("/statuses/:user_id", get(get_peer_statuses))
         .route("/leader/:user_id", get(get_leader))
+        .route("/sse", get(sse_hanlder))
         .with_state(selector);
 
     let public_routes = Router::new().route("/health", get(|| async { "OK" }));
     protected_routes.merge(public_routes)
+}
+
+async fn sse_hanlder() -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream = stream::repeat_with(|| Event::default().data("hi!"))
+        .map(Ok)
+        .throttle(Duration::from_secs(1));
+
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(Duration::from_secs(1))
+            .text("keep-alive-text"),
+    )
 }
 
 async fn connect(
