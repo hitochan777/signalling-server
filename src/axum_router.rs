@@ -73,14 +73,35 @@ async fn handle_sse(
     Path(peer_id): Path<String>,
     State(app_state): State<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let receiver = app_state
+    let mut receiver = app_state
         .pubsub
         .lock()
         .unwrap()
         .add_subscriber(&peer_id)
         .unwrap();
-    let receiver_stream = UnboundedReceiverStream::new(receiver)
-        .map(|event| Ok(Event::default().data(serde_json::to_string(&event).unwrap())));
+    struct Guard {
+        app_state: Arc<AppState>,
+        peer_id: String,
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            println!("SSE connection {} is gone", self.peer_id);
+            self.app_state.pubsub.lock().unwrap().remove_subscriber(&self.peer_id);
+        }
+    }
+
+    let receiver_stream = async_stream::stream! {
+        let _guard = Guard {
+            app_state: app_state.clone(),
+            peer_id: peer_id.clone(),
+        };
+        loop {
+            let event = receiver.recv().await;
+            yield Ok(Event::default().data(serde_json::to_string(&event).unwrap()));
+        }
+        // `_guard` is dropped
+    };
     Sse::new(receiver_stream).keep_alive(
         axum::response::sse::KeepAlive::new()
             .interval(Duration::from_secs(1))

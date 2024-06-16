@@ -29,4 +29,7 @@ impl<T: Send + Sync + 'static> PubSub<T> {
         self.conn_map.insert(target.to_string(), tx);
         Ok(rx)
     }
+    pub fn remove_subscriber(&mut self, target: &str) {
+        self.conn_map.remove(target);
+    }
 }
