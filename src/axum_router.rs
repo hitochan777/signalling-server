@@ -13,7 +13,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio_stream::{wrappers::UnboundedReceiverStream, Stream, StreamExt};
+use tokio_stream::Stream;
 
 struct AppState {
     selector: Arc<leader_selector::LeaderSelector>,
@@ -87,7 +87,12 @@ async fn handle_sse(
     impl Drop for Guard {
         fn drop(&mut self) {
             println!("SSE connection {} is gone", self.peer_id);
-            self.app_state.pubsub.lock().unwrap().remove_subscriber(&self.peer_id);
+            self.app_state
+                .pubsub
+                .lock()
+                .unwrap()
+                .remove_subscriber(&self.peer_id);
+            // TODO: maybe i should call handle_disconnect because it is likely that the SSE disconnection means there is network issue
         }
     }
 
